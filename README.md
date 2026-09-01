@@ -5,6 +5,8 @@ Arduino Uno Studio is a Windows desktop learning environment for Arduino Uno. It
 ## Highlights
 
 - Drag beginner-friendly Arduino C++ commands into the editor, then edit real code.
+- Use **Fix Code** to complete common punctuation mistakes and align Arduino C++ indentation.
+- Undo and redo editor changes from the toolbar or with `Ctrl+Z` and `Ctrl+Y`.
 - Compile and upload sketches to a physical Arduino Uno with the bundled Arduino CLI toolchain.
 - Run compiled ATmega328P programs in the AVR simulator.
 - Build freely wired circuits with an Uno, breadboards, power sources, sensors, LEDs, servos, buzzers, WS2812B strips, and an HC-SR04 ultrasonic sensor.
@@ -35,6 +37,7 @@ npm run build
 ```powershell
 npm run lint
 npm run diagnostics:test
+npm run code-fixer:test
 npm run toolbox:test
 npm run circuit:test
 npm run electrical:test

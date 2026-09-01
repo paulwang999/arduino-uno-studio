@@ -461,6 +461,48 @@ function createWindow() {
           window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' })
           window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' })
         }
+        window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'A', modifiers: ['control'] })
+        window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'A', modifiers: ['control'] })
+        await window.webContents.insertText(`void setup( {
+pinMode(13, OUTPUT)
+}
+
+void loop() {
+digitalWrite(13, HIGH)
+}`)
+        const codeFixerTest = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+          const button = document.querySelector('[data-fix-code]');
+          if (!button) return reject(new Error('Fix Code button is unavailable'));
+          button.click();
+          setTimeout(() => {
+            const lines = Array.from(document.querySelectorAll('.view-lines .view-line')).map((line) => (line.textContent || '').replaceAll(String.fromCharCode(160), ' ')).join('\\n');
+            const output = document.querySelector('.build-console pre')?.textContent || '';
+            if (!lines.includes('void setup() {') || !lines.includes('pinMode(13, OUTPUT);') || !lines.includes('digitalWrite(13, HIGH);')) {
+              return reject(new Error('Fix Code did not repair punctuation: ' + lines));
+            }
+            if (!output.includes('Fix Code completed') || !output.includes('Indentation aligned')) {
+              return reject(new Error('Fix Code did not report its result'));
+            }
+            const undo = document.querySelector('[data-editor-undo]');
+            const redo = document.querySelector('[data-editor-redo]');
+            if (!undo || undo.disabled || !redo || !redo.disabled) return reject(new Error('Undo/redo state is invalid after Fix Code'));
+            undo.click();
+            setTimeout(() => {
+              const undone = Array.from(document.querySelectorAll('.view-lines .view-line')).map((line) => (line.textContent || '').replaceAll(String.fromCharCode(160), ' ')).join('\\n');
+              if (!undone.includes('void setup( {') || undone.includes('pinMode(13, OUTPUT);') || redo.disabled) {
+                return reject(new Error('Undo did not restore the uncorrected code: ' + undone));
+              }
+              redo.click();
+              setTimeout(() => {
+                const redone = Array.from(document.querySelectorAll('.view-lines .view-line')).map((line) => (line.textContent || '').replaceAll(String.fromCharCode(160), ' ')).join('\\n');
+                if (!redone.includes('void setup() {') || !redone.includes('pinMode(13, OUTPUT);') || undo.disabled) {
+                  return reject(new Error('Redo did not restore the corrected code: ' + redone));
+                }
+                resolve({ punctuation: true, undo: true, redo: true, output });
+              }, 100);
+            }, 100);
+          }, 150);
+        })`)
         const exampleLibraryTest = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
           const examplesButton = document.querySelector('.examples-button');
           if (!examplesButton) return reject(new Error('Examples button not found'));
@@ -670,6 +712,7 @@ function createWindow() {
         result.restart = restartTest
         result.toolbox = toolboxTest
         result.autocomplete = autocompleteUiTest
+        result.codeFixer = codeFixerTest
         result.examples = exampleLibraryTest
         result.catalog = catalogTest
         const wiringTest = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {

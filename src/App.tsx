@@ -22,6 +22,7 @@ import {
   Music2,
   Play,
   Repeat2,
+  Redo2,
   RotateCcw,
   Save,
   Search,
@@ -29,8 +30,10 @@ import {
   Sparkles,
   SquareTerminal,
   Upload,
+  Undo2,
   Usb,
   Variable,
+  WandSparkles,
   X,
 } from 'lucide-react'
 import type { editor as MonacoEditor } from 'monaco-editor'
@@ -50,6 +53,7 @@ import { ConsoleOutput } from './components/ConsoleOutput'
 import { ExampleLibrary } from './components/ExampleLibrary'
 import { HardwarePanel } from './components/HardwarePanel'
 import { circuitHardwareDiagnostics, codeDiagnostics } from './diagnostics'
+import { fixArduinoCode } from './codeFixer'
 import { solveElectricalCircuit } from './electrical'
 import { prepareSnippet, snippets, type Snippet } from './snippets'
 import type { SimulationState, WorkerCommand, WorkerEvent } from './simulator/types'
@@ -97,6 +101,12 @@ function stoppedCircuitState(design: CircuitDesign): SimulationState {
 }
 
 type BuildState = 'idle' | 'compiling' | 'success' | 'error'
+type UndoRedoModel = MonacoEditor.ITextModel & {
+  canRedo?: () => boolean
+  canUndo?: () => boolean
+  redo?: () => Promise<void> | void
+  undo?: () => Promise<void> | void
+}
 
 function formatBuildOutput(result: CompileResult) {
   const text = [result.stderr, result.stdout].filter(Boolean).join('\n').trim()
@@ -138,6 +148,7 @@ function App() {
   const codeRef = useRef(code)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const autocompleteDisposableRef = useRef<{ dispose(): void } | null>(null)
+  const editorHistoryDisposableRef = useRef<{ dispose(): void } | null>(null)
   const workerRef = useRef<Worker | null>(null)
   const compiledHexRef = useRef('')
   const compilePromiseRef = useRef<Promise<string | null> | null>(null)
@@ -148,6 +159,8 @@ function App() {
   const [filePath, setFilePath] = useState<string | null>(null)
   const [fileName, setFileName] = useState('arduino-project.ino')
   const [dirty, setDirty] = useState(false)
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
   const [runtime, setRuntime] = useState<RuntimeStatus>({ ready: false, version: '', message: 'Checking compiler...' })
   const [buildState, setBuildState] = useState<BuildState>('idle')
   const [buildOutput, setBuildOutput] = useState('Ready to compile for Arduino Uno.')
@@ -262,6 +275,7 @@ function App() {
       unsubscribeHardwareSerial()
       window.arduinoDesktop.stopHardwareSerial()
       autocompleteDisposableRef.current?.dispose()
+      editorHistoryDisposableRef.current?.dispose()
       worker.terminate()
     }
   }, [])
@@ -301,6 +315,17 @@ function App() {
     editorRef.current = editor
     autocompleteDisposableRef.current?.dispose()
     autocompleteDisposableRef.current = registerArduinoAutocomplete(monaco)
+    editorHistoryDisposableRef.current?.dispose()
+    const updateHistory = () => syncEditorHistory(editor)
+    const contentDisposable = editor.onDidChangeModelContent(() => queueMicrotask(updateHistory))
+    const modelDisposable = editor.onDidChangeModel(() => queueMicrotask(updateHistory))
+    editorHistoryDisposableRef.current = {
+      dispose() {
+        contentDisposable.dispose()
+        modelDisposable.dispose()
+      },
+    }
+    updateHistory()
     const domNode = editor.getDomNode()
     if (!domNode) return
 
@@ -329,6 +354,61 @@ function App() {
       editor.focus()
       setActiveSnippet(snippet)
     }, true)
+  }
+
+  function syncEditorHistory(editor = editorRef.current) {
+    const model = editor?.getModel() as UndoRedoModel | null | undefined
+    setCanUndo(Boolean(model?.canUndo?.()))
+    setCanRedo(Boolean(model?.canRedo?.()))
+  }
+
+  async function runEditorHistoryAction(action: 'undo' | 'redo') {
+    const editor = editorRef.current
+    const model = editor?.getModel() as UndoRedoModel | null | undefined
+    if (!editor || !model) return
+    await model[action]?.()
+    syncEditorHistory(editor)
+    editor.focus()
+  }
+
+  function fixCode() {
+    const editor = editorRef.current
+    const source = editor?.getValue() ?? codeRef.current
+    const result = fixArduinoCode(source)
+    if (result.code === source) {
+      setBuildState('idle')
+      setBuildOutput('Fix Code: punctuation and indentation already look tidy.')
+      editor?.focus()
+      return
+    }
+
+    const model = editor?.getModel()
+    const cursorOffset = model && editor?.getPosition() ? model.getOffsetAt(editor.getPosition()!) : 0
+    if (editor && model) {
+      editor.pushUndoStop()
+      editor.executeEdits('fix-code', [{
+        range: model.getFullModelRange(),
+        text: result.code,
+        forceMoveMarkers: true,
+      }])
+      editor.pushUndoStop()
+      editor.setPosition(model.getPositionAt(Math.min(cursorOffset, result.code.length)))
+      editor.focus()
+    }
+
+    setCode(result.code)
+    codeRef.current = result.code
+    setDirty(true)
+    compiledHexRef.current = ''
+    setHasCompiled(false)
+    setBuildState('idle')
+    const repairs = [
+      result.addedSemicolons && `${result.addedSemicolons} semicolon${result.addedSemicolons === 1 ? '' : 's'}`,
+      result.addedParentheses && `${result.addedParentheses} closing parenthesis${result.addedParentheses === 1 ? '' : 'es'}`,
+      result.addedFunctionCalls && `${result.addedFunctionCalls} function call${result.addedFunctionCalls === 1 ? '' : 's'}`,
+      result.addedBraces && `${result.addedBraces} closing brace${result.addedBraces === 1 ? '' : 's'}`,
+    ].filter(Boolean)
+    setBuildOutput(`Fix Code completed${repairs.length ? `: added ${repairs.join(', ')}` : ''}. Indentation aligned; review the result, then compile.`)
   }
 
   function postWorker(command: WorkerCommand) {
@@ -640,11 +720,22 @@ function App() {
 
         <section className="editor-panel">
           <div className="editor-heading">
-            <div>
+            <div className="editor-file-title">
               <span>CODE EDITOR</span>
               <strong><FileCode2 />{fileName}{dirty ? ' *' : ''}</strong>
             </div>
-            <span>Arduino Uno · C++</span>
+            <div className="editor-actions">
+              <button data-editor-undo className="editor-history-button" type="button" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={() => void runEditorHistoryAction('undo')}>
+                <Undo2 />
+              </button>
+              <button data-editor-redo className="editor-history-button" type="button" title="Redo (Ctrl+Y)" disabled={!canRedo} onClick={() => void runEditorHistoryAction('redo')}>
+                <Redo2 />
+              </button>
+              <button data-fix-code className="editor-fix-button" type="button" title="Complete common punctuation and format indentation" onClick={fixCode}>
+                <WandSparkles />Fix Code
+              </button>
+              <span className="editor-language">Arduino Uno · C++</span>
+            </div>
           </div>
           <div className="monaco-shell" data-autocomplete-count={arduinoCompletionCount}>
             <Editor
@@ -671,6 +762,12 @@ function App() {
                 quickSuggestionsDelay: 60,
                 suggestOnTriggerCharacters: true,
                 acceptSuggestionOnEnter: 'on',
+                autoClosingBrackets: 'always',
+                autoClosingOvertype: 'always',
+                autoClosingQuotes: 'always',
+                autoIndent: 'full',
+                autoSurround: 'languageDefined',
+                bracketPairColorization: { enabled: true },
                 tabCompletion: 'on',
                 snippetSuggestions: 'top',
                 suggest: { showWords: false },
