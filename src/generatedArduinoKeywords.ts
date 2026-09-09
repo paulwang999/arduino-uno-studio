@@ -2570,6 +2570,16 @@ export const generatedArduinoKeywords: GeneratedArduinoKeyword[] = [
 ]
 
 export const generatedArduinoHeaders = [
+  "Adafruit_BusIO_Register.h",
+  "Adafruit_GFX.h",
+  "Adafruit_GenericDevice.h",
+  "Adafruit_GrayOLED.h",
+  "Adafruit_I2CDevice.h",
+  "Adafruit_I2CRegister.h",
+  "Adafruit_SPIDevice.h",
+  "Adafruit_SPITFT.h",
+  "Adafruit_SPITFT_Macros.h",
+  "Adafruit_SSD1306.h",
   "Arduino.h",
   "CapacitiveSensor.h",
   "EEPROM.h",
@@ -2582,5 +2592,7 @@ export const generatedArduinoHeaders = [
   "SoftwareSerial.h",
   "Stepper.h",
   "StudioSonar.h",
-  "Wire.h"
+  "Wire.h",
+  "gfxfont.h",
+  "splash.h"
 ] as const

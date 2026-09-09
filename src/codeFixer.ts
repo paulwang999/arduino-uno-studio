@@ -4,6 +4,7 @@ export type CodeFixResult = {
   addedFunctionCalls: number
   addedParentheses: number
   addedSemicolons: number
+  normalizedOperators: number
   changedLines: number
 }
 
@@ -80,6 +81,23 @@ function maskLines(lines: string[]) {
     state = result.state
     return result
   })
+}
+
+function normalizeSplitOperators(lines: string[]) {
+  const masked = maskLines(lines)
+  let normalized = 0
+  const output = lines.map((line, index) => {
+    const matches = [...masked[index].mask.matchAll(/([<>=!])([ \t]+)=/g)].reverse()
+    if (!matches.length) return line
+    let result = line
+    for (const match of matches) {
+      const start = match.index!
+      result = `${result.slice(0, start)}${match[1]}=${result.slice(start + match[0].length)}`
+      normalized += 1
+    }
+    return result
+  })
+  return { lines: output, normalized }
 }
 
 function codeEnd(mask: string) {
@@ -282,6 +300,9 @@ export function fixArduinoCode(source: string): CodeFixResult {
   let lines = [...originalLines]
   let addedParentheses = 0
 
+  const operators = normalizeSplitOperators(lines)
+  lines = operators.lines
+
   let masked = maskLines(lines)
   lines = lines.map((line, index) => {
     const result = completeHeaderPunctuation(line, masked[index].mask)
@@ -325,6 +346,7 @@ export function fixArduinoCode(source: string): CodeFixResult {
     addedFunctionCalls,
     addedParentheses,
     addedSemicolons: semicolons.added,
+    normalizedOperators: operators.normalized,
     changedLines,
   }
 }

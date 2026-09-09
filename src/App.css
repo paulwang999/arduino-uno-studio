@@ -819,11 +819,13 @@ body.resizing-panels * {
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 12px;
   font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .snippet small {
+  flex-shrink: 0;
   color: #3c5b68;
   font-size: 9px;
   font-weight: 800;
@@ -1722,6 +1724,35 @@ body.resizing-panels * {
   place-items: center;
 }
 
+.component-pir .circuit-node-body,
+.component-ntc .circuit-node-body,
+.component-slide-switch .circuit-node-body,
+.component-joystick .circuit-node-body,
+.component-rgb-led .circuit-node-body {
+  height: calc(100% - 58px);
+  padding: 4px 12px;
+  gap: 4px;
+}
+
+.new-part-visual { display: block; position: relative; width: 110px; height: 55px; pointer-events: none; }
+.new-part-visual > * { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.55); }
+.component-rgb-led .new-part-visual { height: 74px; }
+.component-rgb-led .new-part-visual > * { transform: translate(-50%, -50%) scale(0.85); }
+.component-slide-switch .new-part-visual { height: 42px; }
+.component-slide-switch .new-part-visual > * { transform: translate(-50%, -50%); }
+.sensor-toggle { display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; }
+.sensor-toggle input { accent-color: #36c879; }
+.sensor-range { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+.sensor-range output { width: 27px; text-align: right; font-variant-numeric: tabular-nums; }
+.circuit-node-body .sensor-range input[type="range"] { width: 98px; min-width: 0; align-self: center; }
+.component-ntc .sensor-range { flex-direction: column; gap: 0; }
+.joystick-center { position: absolute; right: 10px; bottom: 35px; width: 24px; height: 24px; display: grid; place-items: center; }
+.component-pir .free-terminal b,
+.component-ntc .free-terminal b,
+.component-slide-switch .free-terminal b,
+.component-joystick .free-terminal b,
+.component-rgb-led .free-terminal b { left: 50%; transform: translateX(-50%); }
+
 .circuit-node-body > strong {
   align-self: end;
   color: #8fb3c6;
@@ -2233,6 +2264,11 @@ body.resizing-panels * {
 .component-preview.ultrasonic > * { width: 173px; height: 115px; transform: translate(-50%, -50%) scale(0.38); }
 .component-preview.buzzer > * { width: 64px; height: 76px; transform: translate(-50%, -50%) scale(0.58); }
 .component-preview.servo > * { width: 170px; height: 120px; transform: translate(-50%, -50%) scale(0.3); }
+.component-preview.pir > * { width: 91px; height: 93px; transform: translate(-50%, -50%) scale(0.5); }
+.component-preview.ntc > * { width: 136px; height: 72px; transform: translate(-50%, -50%) scale(0.42); }
+.component-preview.joystick > * { width: 103px; height: 120px; transform: translate(-50%, -50%) scale(0.42); }
+.component-preview.rgb-led > * { width: 43px; height: 73px; transform: translate(-50%, -50%) scale(0.6); }
+.component-preview.slide-switch > * { width: 33px; height: 35px; transform: translate(-50%, -50%); }
 
 .component-preview.ws2812b > * {
   transform: translate(-50%, -50%);
@@ -3009,3 +3045,10 @@ body.resizing-panels * {
     transform: scale(0.96);
   }
 }
+.oled-board { display: block; width: 208px; max-width: 100%; padding: 8px; border: 3px solid #276d89; border-radius: 4px; background: #12617f; box-sizing: border-box; }
+.oled-board canvas { display: block; width: 100%; aspect-ratio: 2; image-rendering: pixelated; background: #000; }
+.circuit-node .oled-board { margin: 8px auto 6px; pointer-events: none; }
+.oled-address { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; }
+.oled-address select { padding: 3px 8px; color: #edf4f6; background: #172129; border: 1px solid #52616c; border-radius: 3px; }
+.component-preview .oled-board { width: 58px; padding: 3px; border-width: 2px; }
+.lab-sensor .oled-board { margin: 8px auto; }

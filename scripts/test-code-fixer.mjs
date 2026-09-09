@@ -24,6 +24,22 @@ void loop() {
 assert.equal(fixedSketch.addedParentheses, 2)
 assert.equal(fixedSketch.addedSemicolons, 2)
 
+const splitOperators = fixArduinoCode(`void loop() {
+  for (int i = 0; i <  = 5; i++) {
+    bool same = i = = 3;
+    bool different = i ! = 4;
+    bool positive = i > = 0;
+    Serial.println("Keep < = and = = in this string"); // Keep > = in this comment
+  }
+}`)
+assert.match(splitOperators.code, /i <= 5/)
+assert.match(splitOperators.code, /i == 3/)
+assert.match(splitOperators.code, /i != 4/)
+assert.match(splitOperators.code, /i >= 0/)
+assert.match(splitOperators.code, /"Keep < = and = = in this string"/)
+assert.match(splitOperators.code, /\/\/ Keep > = in this comment/)
+assert.equal(splitOperators.normalizedOperators, 4)
+
 const customFunction = fixArduinoCode(`void loop() {
 Wing_Flaps
 }
@@ -82,5 +98,6 @@ assert.equal(switchSketch.code, `void loop() {
 }`)
 
 assert.equal(fixArduinoCode(fixedSketch.code).code, fixedSketch.code, 'Fix Code must be idempotent.')
+assert.equal(fixArduinoCode(splitOperators.code).code, splitOperators.code, 'Operator normalization must be idempotent.')
 
 console.log('Code fixer tests passed.')

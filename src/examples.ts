@@ -1,5 +1,7 @@
 import type { ArduinoExample } from './exampleTypes'
 import { generatedExamples, officialExamplesCommit } from './generatedExamples'
+import { componentExamples } from './componentExamples'
+import { oledExamples } from './oledExamples'
 
 const studioExamples: ArduinoExample[] = [
   {
@@ -112,7 +114,7 @@ void loop() {
   },
 ]
 
-export const examples: ArduinoExample[] = [...studioExamples, ...generatedExamples]
+export const examples: ArduinoExample[] = [...studioExamples, ...componentExamples, ...oledExamples, ...generatedExamples]
 export const defaultExample = studioExamples[0]
 export const exampleCategories = Array.from(new Set(examples.map((example) => example.category)))
 export const examplesSourceCommit = officialExamplesCommit

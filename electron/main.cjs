@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
+const { readSketch, sketchPathKey, sketchPathsFromArguments } = require('./sketch-files.cjs')
 const {
   monitorArguments,
   normalizeBaudRate,
@@ -18,6 +19,71 @@ let packagedRuntimeDrive = ''
 let hardwareMonitor = null
 
 const isHardwareSmokeTest = Boolean(process.env.ARDUINO_STUDIO_SMOKE_TEST)
+const sketchWindows = new Map()
+const launchFiles = sketchPathsFromArguments(process.argv.slice(process.defaultApp ? 2 : 1))
+const isPrimaryInstance = app.requestSingleInstanceLock({ sketchFiles: launchFiles })
+let pendingFileOpens = Promise.resolve()
+
+function focusWindow(window) {
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
+}
+
+function trackSketchPath(sender, filePath) {
+  const document = sketchWindows.get(sender.id)
+  if (!document) return
+  document.filePath = filePath
+  document.window.setTitle(filePath ? `${path.basename(filePath)} - ${APP_NAME}` : APP_NAME)
+}
+
+async function showSketchOpenError(filePath, error) {
+  await dialog.showMessageBox({
+    type: 'error',
+    title: 'Unable to open sketch',
+    message: `Could not open ${path.basename(filePath)}.`,
+    detail: `${filePath}\n\n${String(error.message || error)}`,
+  })
+}
+
+function enqueueFileOpens(filePaths) {
+  // Explorer can launch multiple processes before the first window is ready.
+  pendingFileOpens = pendingFileOpens.then(async () => {
+    await app.whenReady()
+    for (const filePath of filePaths) {
+      const existing = [...sketchWindows.values()].find((document) => (
+        document.filePath && sketchPathKey(document.filePath) === sketchPathKey(filePath)
+      ))
+      if (existing) {
+        focusWindow(existing.window)
+        continue
+      }
+      try {
+        createWindow(await readSketch(filePath))
+      } catch (error) {
+        await showSketchOpenError(filePath, error)
+      }
+    }
+    if (sketchWindows.size === 0) createWindow()
+    else if (filePaths.length === 0) focusWindow([...sketchWindows.values()].at(-1).window)
+  })
+  return pendingFileOpens
+}
+
+if (!isPrimaryInstance) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv, workingDirectory, additionalData) => {
+    const files = Array.isArray(additionalData?.sketchFiles)
+      ? additionalData.sketchFiles
+      : argv.slice(process.defaultApp ? 2 : 1)
+    enqueueFileOpens(sketchPathsFromArguments(files, workingDirectory))
+  })
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault()
+    enqueueFileOpens([filePath])
+  })
+}
 
 function existingRuntimeDrive(target) {
   const result = spawnSync('subst', [], { windowsHide: true, encoding: 'utf8' })
@@ -273,9 +339,9 @@ function sendHardwareSerial(sender, payload) {
   if (sender && !sender.isDestroyed()) sender.send('hardware:serial-event', payload)
 }
 
-function stopHardwareMonitor() {
+function stopHardwareMonitor(sender) {
   const session = hardwareMonitor
-  if (!session) return
+  if (!session || (sender && session.sender !== sender)) return
   hardwareMonitor = null
   if (session.mock) {
     sendHardwareSerial(session.sender, { type: 'status', status: 'disconnected', message: 'USB Serial disconnected.' })
@@ -349,7 +415,7 @@ function writeHardwareSerial(text) {
   return { ok: true, message: 'Sent.' }
 }
 
-function createWindow() {
+function createWindow(initialSketch = null) {
   const window = new BrowserWindow({
     width: 1500,
     height: 930,
@@ -365,6 +431,15 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
     },
+  })
+
+  const sender = window.webContents
+  sketchWindows.set(sender.id, { window, initialSketch, filePath: initialSketch?.filePath ?? null })
+  trackSketchPath(sender, initialSketch?.filePath ?? null)
+  window.on('page-title-updated', (event) => event.preventDefault())
+  window.on('closed', () => {
+    stopHardwareMonitor(sender)
+    sketchWindows.delete(sender.id)
   })
 
   window.once('ready-to-show', () => window.show())
@@ -398,7 +473,7 @@ function createWindow() {
             const inputExpanded = document.querySelector('[data-toolbox-category="input"]')?.getAttribute('aria-expanded') === 'true';
             const inputSnippets = Array.from(document.querySelectorAll('.toolbox-drawer [data-snippet-id]')).map((item) => item.dataset.snippetId);
             const search = document.querySelector('.toolbox-search input');
-            if (!inputExpanded || inputSnippets.join('|') !== 'digital-read|analog-read|ultrasonic-distance' || !search) {
+            if (!inputExpanded || inputSnippets.join('|') !== 'digital-read|analog-read|ultrasonic-distance|pir-motion|ntc-temperature|slide-switch-read|joystick-read' || !search) {
               return reject(new Error('Input toolbox drawer is invalid'));
             }
             const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
@@ -468,7 +543,9 @@ pinMode(13, OUTPUT)
 }
 
 void loop() {
+for (int i = 0; i < = 2; i++) {
 digitalWrite(13, HIGH)
+}
 }`)
         const codeFixerTest = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
           const button = document.querySelector('[data-fix-code]');
@@ -477,7 +554,7 @@ digitalWrite(13, HIGH)
           setTimeout(() => {
             const lines = Array.from(document.querySelectorAll('.view-lines .view-line')).map((line) => (line.textContent || '').replaceAll(String.fromCharCode(160), ' ')).join('\\n');
             const output = document.querySelector('.build-console pre')?.textContent || '';
-            if (!lines.includes('void setup() {') || !lines.includes('pinMode(13, OUTPUT);') || !lines.includes('digitalWrite(13, HIGH);')) {
+            if (!lines.includes('void setup() {') || !lines.includes('pinMode(13, OUTPUT);') || !lines.includes('for (int i = 0; i <= 2; i++) {') || !lines.includes('digitalWrite(13, HIGH);')) {
               return reject(new Error('Fix Code did not repair punctuation: ' + lines));
             }
             if (!output.includes('Fix Code completed') || !output.includes('Indentation aligned')) {
@@ -512,7 +589,7 @@ digitalWrite(13, HIGH)
             const search = document.querySelector('.example-search input');
             const rows = document.querySelectorAll('.example-row');
             const categoryButtons = Array.from(document.querySelectorAll('.example-categories button'));
-            if (!library || !search || rows.length !== 130 || categoryButtons.length !== 21) {
+            if (!library || !search || rows.length !== 137 || categoryButtons.length !== 21) {
               return reject(new Error('Example library count or categories are invalid'));
             }
             const communication = categoryButtons.find((button) => button.textContent.includes('04. Communication'));
@@ -1155,18 +1232,20 @@ digitalWrite(13, HIGH)
   }
 }
 
-app.whenReady().then(() => {
+if (isPrimaryInstance) app.whenReady().then(() => {
   ipcMain.handle('runtime:status', getRuntimeStatus)
   ipcMain.handle('sketch:compile', (_event, code) => compileSketch(String(code || '')))
   ipcMain.handle('hardware:list', listHardwarePorts)
   ipcMain.handle('hardware:upload', (_event, payload) => compileAndUploadSketch(String(payload?.code || ''), payload?.port))
   ipcMain.handle('hardware:serial-start', (event, payload) => startHardwareMonitor(event.sender, payload?.port, payload?.baudRate))
-  ipcMain.handle('hardware:serial-stop', () => {
-    stopHardwareMonitor()
+  ipcMain.handle('hardware:serial-stop', (event) => {
+    stopHardwareMonitor(event.sender)
     return { ok: true, message: 'USB Serial disconnected.' }
   })
   ipcMain.handle('hardware:serial-write', (_event, text) => writeHardwareSerial(text))
-  ipcMain.handle('sketch:open', async () => {
+  ipcMain.handle('sketch:initial', (event) => sketchWindows.get(event.sender.id)?.initialSketch ?? null)
+  ipcMain.handle('sketch:set-path', (event, filePath) => trackSketchPath(event.sender, filePath))
+  ipcMain.handle('sketch:open', async (event) => {
     const result = await dialog.showOpenDialog({
       title: 'Open Arduino sketch',
       properties: ['openFile'],
@@ -1174,9 +1253,16 @@ app.whenReady().then(() => {
     })
     if (result.canceled || !result.filePaths[0]) return null
     const filePath = result.filePaths[0]
-    return { filePath, name: path.basename(filePath), code: await fsp.readFile(filePath, 'utf8') }
+    try {
+      const sketch = await readSketch(filePath)
+      trackSketchPath(event.sender, sketch.filePath)
+      return sketch
+    } catch (error) {
+      await showSketchOpenError(filePath, error)
+      return null
+    }
   })
-  ipcMain.handle('sketch:save', async (_event, payload) => {
+  ipcMain.handle('sketch:save', async (event, payload) => {
     const requestedPath = payload?.filePath
     let filePath = requestedPath
 
@@ -1191,6 +1277,7 @@ app.whenReady().then(() => {
     }
 
     await fsp.writeFile(filePath, String(payload?.code || ''), 'utf8')
+    trackSketchPath(event.sender, filePath)
     return { filePath, name: path.basename(filePath) }
   })
   ipcMain.handle('link:open', (_event, url) => {
@@ -1199,7 +1286,7 @@ app.whenReady().then(() => {
     return undefined
   })
 
-  createWindow()
+  enqueueFileOpens(launchFiles)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

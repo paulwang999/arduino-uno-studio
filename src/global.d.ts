@@ -28,6 +28,8 @@ interface Window {
     writeHardwareSerial: (text: string) => Promise<HardwareActionResult>
     onHardwareSerial: (callback: (event: HardwareSerialEvent) => void) => () => void
     openSketch: () => Promise<SketchFile | null>
+    getInitialSketch: () => Promise<SketchFile | null>
+    setSketchPath: (filePath: string | null) => Promise<void>
     saveSketch: (payload: { filePath: string | null; code: string }) => Promise<SketchFile | null>
     openExternal: (url: string) => Promise<void>
     platform: string

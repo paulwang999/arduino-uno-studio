@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('arduinoDesktop', {
     return () => ipcRenderer.removeListener('hardware:serial-event', listener)
   },
   openSketch: () => ipcRenderer.invoke('sketch:open'),
+  getInitialSketch: () => ipcRenderer.invoke('sketch:initial'),
+  setSketchPath: (filePath) => ipcRenderer.invoke('sketch:set-path', filePath),
   saveSketch: (payload) => ipcRenderer.invoke('sketch:save', payload),
   openExternal: (url) => ipcRenderer.invoke('link:open', url),
   platform: process.platform,

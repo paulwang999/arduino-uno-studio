@@ -7,12 +7,22 @@ import type {
   PotentiometerElement,
   PushbuttonElement,
   ServoElement,
+  AnalogJoystickElement,
+  NTCTemperatureSensorElement,
+  PIRMotionSensorElement,
+  RGBLedElement,
+  SlideSwitchElement,
 } from '@wokwi/elements'
 import type { ClassAttributes, HTMLAttributes } from 'react'
 
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
+      'wokwi-analog-joystick': ClassAttributes<AnalogJoystickElement> & HTMLAttributes<AnalogJoystickElement> & Partial<AnalogJoystickElement>
+      'wokwi-ntc-temperature-sensor': ClassAttributes<NTCTemperatureSensorElement> & HTMLAttributes<NTCTemperatureSensorElement> & Partial<NTCTemperatureSensorElement>
+      'wokwi-pir-motion-sensor': ClassAttributes<PIRMotionSensorElement> & HTMLAttributes<PIRMotionSensorElement> & Partial<PIRMotionSensorElement>
+      'wokwi-rgb-led': ClassAttributes<RGBLedElement> & HTMLAttributes<RGBLedElement> & Partial<RGBLedElement>
+      'wokwi-slide-switch': ClassAttributes<SlideSwitchElement> & HTMLAttributes<SlideSwitchElement> & Partial<SlideSwitchElement>
       'wokwi-arduino-uno': ClassAttributes<ArduinoUnoElement> &
         HTMLAttributes<ArduinoUnoElement> &
         Partial<ArduinoUnoElement>

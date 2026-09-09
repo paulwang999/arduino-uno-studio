@@ -52,6 +52,7 @@ import { CircuitCanvas } from './components/CircuitCanvas'
 import { ConsoleOutput } from './components/ConsoleOutput'
 import { ExampleLibrary } from './components/ExampleLibrary'
 import { HardwarePanel } from './components/HardwarePanel'
+import { OledAddress, OledDisplay } from './components/OledDisplay'
 import { circuitHardwareDiagnostics, codeDiagnostics } from './diagnostics'
 import { fixArduinoCode } from './codeFixer'
 import { solveElectricalCircuit } from './electrical'
@@ -202,6 +203,20 @@ function App() {
   }, [circuitDesign])
 
   useEffect(() => {
+    let active = true
+    window.arduinoDesktop.getInitialSketch().then((sketch) => {
+      if (active && sketch?.code !== undefined) {
+        setEditorCode(sketch.code, sketch.name, sketch.filePath)
+      }
+    }).catch((error) => {
+      if (!active) return
+      setBuildState('error')
+      setBuildOutput(`Unable to load the requested sketch: ${String(error)}`)
+    })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
     if (!resizingPanel) return
 
     function resizePanel(event: PointerEvent) {
@@ -300,6 +315,7 @@ function App() {
   }
 
   function setEditorCode(nextCode: string, nextName = fileName, nextPath: string | null = filePath) {
+    window.arduinoDesktop.setSketchPath(nextPath)
     setCode(nextCode)
     codeRef.current = nextCode
     setFileName(nextName)
@@ -403,12 +419,13 @@ function App() {
     setHasCompiled(false)
     setBuildState('idle')
     const repairs = [
-      result.addedSemicolons && `${result.addedSemicolons} semicolon${result.addedSemicolons === 1 ? '' : 's'}`,
-      result.addedParentheses && `${result.addedParentheses} closing parenthesis${result.addedParentheses === 1 ? '' : 'es'}`,
-      result.addedFunctionCalls && `${result.addedFunctionCalls} function call${result.addedFunctionCalls === 1 ? '' : 's'}`,
-      result.addedBraces && `${result.addedBraces} closing brace${result.addedBraces === 1 ? '' : 's'}`,
+      result.normalizedOperators && `joined ${result.normalizedOperators} split operator${result.normalizedOperators === 1 ? '' : 's'}`,
+      result.addedSemicolons && `added ${result.addedSemicolons} semicolon${result.addedSemicolons === 1 ? '' : 's'}`,
+      result.addedParentheses && `added ${result.addedParentheses} closing parenthesis${result.addedParentheses === 1 ? '' : 'es'}`,
+      result.addedFunctionCalls && `added ${result.addedFunctionCalls} function call${result.addedFunctionCalls === 1 ? '' : 's'}`,
+      result.addedBraces && `added ${result.addedBraces} closing brace${result.addedBraces === 1 ? '' : 's'}`,
     ].filter(Boolean)
-    setBuildOutput(`Fix Code completed${repairs.length ? `: added ${repairs.join(', ')}` : ''}. Indentation aligned; review the result, then compile.`)
+    setBuildOutput(`Fix Code completed${repairs.length ? `: ${repairs.join(', ')}` : ''}. Indentation aligned; review the result, then compile.`)
   }
 
   function postWorker(command: WorkerCommand) {
@@ -915,6 +932,15 @@ function App() {
                     <strong>{pixelColors.some((color) => color !== '#000000') ? 'ACTIVE' : 'OFF'}</strong>
                   </section>
                   if (part.type === 'breadboard') return <section className="component" key={part.instanceId}><div><span>{label}</span><small>420 holes</small></div><strong>CONNECTED STRIPS</strong></section>
+                  if (['pir', 'ntc', 'slide-switch', 'joystick', 'rgb-led', 'oled'].includes(part.type)) return <section className="component lab-sensor" key={part.instanceId}>
+                    <div><span>{label}</span><small>{(output?.voltage || 0).toFixed(2)}V</small></div>
+                    {part.type === 'pir' && <label className="sensor-toggle"><input type="checkbox" checked={part.pressed} onChange={(event) => updateCircuitComponent(part.instanceId, { pressed: event.target.checked })} />Motion</label>}
+                    {part.type === 'slide-switch' && <label className="sensor-toggle"><input type="checkbox" checked={part.value === 1} onChange={(event) => updateCircuitComponent(part.instanceId, { value: event.target.checked ? 1 : 0 })} />{part.value === 1 ? '2 - 3' : '2 - 1'}</label>}
+                    {part.type === 'ntc' && <label className="sensor-range">{part.value} °C<input type="range" min="-40" max="125" value={part.value} aria-label={`${label} temperature`} onChange={(event) => updateCircuitComponent(part.instanceId, { value: Number(event.target.value) })} /></label>}
+                    {part.type === 'joystick' && <><label className="sensor-range">X<input type="range" min="0" max="1023" value={part.value} aria-label={`${label} X axis`} onChange={(event) => updateCircuitComponent(part.instanceId, { value: Number(event.target.value) })} /></label><label className="sensor-range">Y<input type="range" min="0" max="1023" value={part.value2 ?? 512} aria-label={`${label} Y axis`} onChange={(event) => updateCircuitComponent(part.instanceId, { value2: Number(event.target.value) })} /></label><label className="sensor-toggle"><input type="checkbox" checked={part.pressed} onChange={(event) => updateCircuitComponent(part.instanceId, { pressed: event.target.checked })} />Select</label></>}
+                    {part.type === 'rgb-led' && <wokwi-rgb-led ledRed={output?.rgb?.[0] || 0} ledGreen={output?.rgb?.[1] || 0} ledBlue={output?.rgb?.[2] || 0} />}
+                    {part.type === 'oled' && <><OledDisplay frame={simulation.oledFrames?.[part.instanceId]} /><OledAddress value={part.value} onChange={(value) => updateCircuitComponent(part.instanceId, { value })} /></>}
+                  </section>
                   return <section className="component" key={part.instanceId}><div><span>{label}</span><small>{part.type === 'battery' ? `${part.voltage}V` : `${part.resistance}Ω`}</small></div><strong>{part.type === 'battery' ? `${Math.round((output?.current || 0) * 1000)}mA` : `${Math.round(Math.abs(output?.current || 0) * 1000)}mA`}</strong></section>
                 })}
               </div>

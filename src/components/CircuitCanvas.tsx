@@ -20,6 +20,7 @@ import {
 import { buildElectricalTopology } from '../electrical'
 import type { SimulationState } from '../simulator/types'
 import { ComponentCatalog } from './ComponentCatalog'
+import { OledAddress, OledDisplay } from './OledDisplay'
 
 const minimumCanvasWidth = 430
 const minimumCanvasHeight = 690
@@ -74,6 +75,10 @@ function breadboardLocalPoint(name: string): Point {
 
 function normalTerminalLocalPoint(part: CircuitPartInstance, name: string): Point {
   const width = circuitPartSizes[part.type].width
+  if (['pir', 'ntc', 'slide-switch', 'joystick', 'rgb-led', 'oled'].includes(part.type)) {
+    const names = partTerminalNames(part.type)
+    return { x: 22 + names.indexOf(name) * (width - 44) / (names.length - 1), y: circuitPartSizes[part.type].height - 20 }
+  }
   if (part.type === 'resistor' || part.type === 'battery') return { x: name === '1' || name === '+' ? 8 : width - 8, y: 60 }
   if (part.type === 'ultrasonic') {
     const x = { VCC: 43, TRIG: 74, ECHO: 106, GND: 137 }[name] || 43
@@ -109,6 +114,7 @@ function wirePath(from: Point, to: Point, bendPoints: Point[]) {
 
 function suggestedWireColor(endpoint: string) {
   if (endpoint.includes('GND') || endpoint.endsWith(':-') || endpoint.endsWith(':K')) return '#30383d'
+  if (endpoint.endsWith(':COM')) return '#30383d'
   if (endpoint.includes('5V') || endpoint.includes('3.3V') || endpoint.endsWith(':+') || endpoint.endsWith(':VCC')) return '#e54848'
   return '#54b8df'
 }
@@ -200,6 +206,20 @@ export function CircuitCanvas({ design, simulation, running, starting, onDesignC
     window.addEventListener('keydown', cancelWithEscape)
     return () => window.removeEventListener('keydown', cancelWithEscape)
   }, [pendingEndpoint])
+
+  useEffect(() => {
+    if (!selectedWireId) return
+    const deleteWireWithKeyboard = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete') return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"], .monaco-editor')) return
+      event.preventDefault()
+      onDesignChange({ ...design, wires: design.wires.filter((wire) => wire.wireId !== selectedWireId) })
+      setSelectedWireId(null)
+    }
+    window.addEventListener('keydown', deleteWireWithKeyboard)
+    return () => window.removeEventListener('keydown', deleteWireWithKeyboard)
+  }, [design, onDesignChange, selectedWireId])
 
   function updatePart(instanceId: string, patch: Partial<CircuitPartInstance>) {
     onDesignChange(updateCircuitPart(design, instanceId, patch))
@@ -480,7 +500,7 @@ export function CircuitCanvas({ design, simulation, running, starting, onDesignC
         <div className="wire-properties-heading">
           <span>{`${endpointLabel(selectedWire.from)} → ${endpointLabel(selectedWire.to)}`}</span>
           <div>
-            <button type="button" title="Delete wire" onClick={deleteSelectedWire}><Trash2 /></button>
+            <button type="button" title="Delete wire" aria-label="Delete wire (Del)" onClick={deleteSelectedWire}><Trash2 /></button>
             <button type="button" title="Close wire editor" onClick={() => setSelectedWireId(null)}><X /></button>
           </div>
         </div>
@@ -612,6 +632,12 @@ function CircuitPart({ part, design, topology, simulation, running, pending, con
     })}
     {part.type !== 'breadboard' && <div className="circuit-node-body">
       {part.type === 'led' && <><span className={`circuit-led-visual ${output?.on ? 'on' : ''}`} /><strong>{output?.on ? `${Math.round(output.current * 1000)}mA` : 'OFF'}</strong></>}
+      {part.type === 'pir' && <><span className="new-part-visual"><wokwi-pir-motion-sensor /></span><label className="sensor-toggle"><input type="checkbox" checked={part.pressed} onChange={(event) => onChange({ pressed: event.target.checked })} />Motion</label><strong>{running ? output?.on ? 'DETECTED' : 'LOW' : 'STOPPED'}</strong></>}
+      {part.type === 'ntc' && <><span className="new-part-visual"><wokwi-ntc-temperature-sensor /></span><label className="sensor-range">Temperature<input type="range" min="-40" max="125" step="1" value={part.value} aria-label={`${label} temperature`} onChange={(event) => onChange({ value: Number(event.target.value) })} /></label><strong>{part.value} °C</strong></>}
+      {part.type === 'slide-switch' && <><span className="new-part-visual"><wokwi-slide-switch value={part.value} /></span><label className="sensor-toggle"><input type="checkbox" checked={part.value === 1} onChange={(event) => onChange({ value: event.target.checked ? 1 : 0 })} />{part.value === 1 ? '2 - 3' : '2 - 1'}</label></>}
+      {part.type === 'joystick' && <><span className="new-part-visual"><wokwi-analog-joystick xValue={(part.value - 512) / 512} yValue={((part.value2 ?? 512) - 512) / 512} pressed={part.pressed} /></span><label className="sensor-range">X<input type="range" min="0" max="1023" value={part.value} aria-label={`${label} X axis`} onChange={(event) => onChange({ value: Number(event.target.value) })} /><output>{part.value}</output></label><label className="sensor-range">Y<input type="range" min="0" max="1023" value={part.value2 ?? 512} aria-label={`${label} Y axis`} onChange={(event) => onChange({ value2: Number(event.target.value) })} /><output>{part.value2 ?? 512}</output></label><label className="sensor-toggle"><input type="checkbox" checked={part.pressed} onChange={(event) => onChange({ pressed: event.target.checked })} />Select</label><button type="button" className="joystick-center" title="Center joystick" onClick={() => onChange({ value: 512, value2: 512, pressed: false })}><Scan size={14} /></button></>}
+      {part.type === 'rgb-led' && <><span className="new-part-visual"><wokwi-rgb-led ledRed={output?.rgb?.[0] || 0} ledGreen={output?.rgb?.[1] || 0} ledBlue={output?.rgb?.[2] || 0} /></span><strong>{output?.on ? `${Math.round(output.current * 1000)}mA` : 'OFF'}</strong></>}
+      {part.type === 'oled' && <><OledDisplay frame={simulation.oledFrames?.[part.instanceId]} /><OledAddress value={part.value} onChange={(value) => onChange({ value })} /></>}
       {part.type === 'button' && <><button className={`circuit-button-visual ${part.pressed ? 'pressed' : ''}`} type="button" onPointerDown={(event) => { event.stopPropagation(); onChange({ pressed: true }) }} onPointerUp={() => onChange({ pressed: false })} onPointerLeave={() => onChange({ pressed: false })}><span /></button><strong>{part.pressed ? 'CLOSED' : 'OPEN'}</strong></>}
       {(part.type === 'potentiometer' || part.type === 'photoresistor') && <><input type="range" min="0" max="1023" value={part.value} aria-label={`${label} value`} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onChange({ value: Number(event.target.value) })} /><strong>{running ? `${(output?.voltage || 0).toFixed(2)}V` : part.value}</strong></>}
       {part.type === 'ultrasonic' && <><span className={`circuit-ultrasonic-visual ${output?.on ? 'powered' : ''}`}><wokwi-hc-sr04 /></span><input type="range" min="2" max="400" value={part.value} aria-label={`${label} distance in centimeters`} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => onChange({ value: Math.max(2, Math.min(400, Number(event.target.value))) })} /><strong>{part.value} cm</strong></>}

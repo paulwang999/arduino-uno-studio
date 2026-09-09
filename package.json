@@ -1,6 +1,6 @@
 {
   "name": "arduino-uno-studio",
-  "version": "1.3.6",
+  "version": "1.5.1",
   "private": true,
   "description": "A desktop Arduino Uno code editor, compiler, and simulator for young learners.",
   "author": "Arduino Uno Studio",
@@ -22,7 +22,10 @@
     "toolbox:test": "node --experimental-strip-types scripts/test-toolbox.mjs",
     "examples:test": "node scripts/test-examples.mjs",
     "hardware:test": "node scripts/test-hardware.mjs",
+    "file-open:test": "node scripts/test-file-open.mjs",
     "circuit:test": "node --experimental-strip-types scripts/test-circuit.mjs",
+    "components:test": "node --experimental-strip-types scripts/test-components.mjs",
+    "oled:test": "node --experimental-strip-types scripts/test-oled.mjs",
     "electrical:test": "node --experimental-strip-types scripts/test-electrical.mjs",
     "ws2812:test": "node --experimental-strip-types scripts/test-ws2812.mjs",
     "ultrasonic:test": "node --experimental-strip-types scripts/test-ultrasonic.mjs",
@@ -57,6 +60,14 @@
     "productName": "Arduino Uno Studio",
     "artifactName": "Arduino-Uno-Studio-Setup-${version}-Windows-${arch}.${ext}",
     "asar": true,
+    "fileAssociations": [
+      {
+        "ext": "ino",
+        "name": "ArduinoUnoStudio.Sketch",
+        "description": "Arduino Uno Studio sketch",
+        "role": "Editor"
+      }
+    ],
     "directories": {
       "output": "release"
     },

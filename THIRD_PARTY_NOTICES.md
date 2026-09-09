@@ -8,6 +8,7 @@ Arduino Uno Studio bundles and uses the following projects:
 - FastLED 3.10.5, Copyright (c) 2013 FastLED, distributed under the MIT License. See `FASTLED_LICENSE.txt`.
 - AVR8js, Copyright (c) 2019 Uri Shaked, distributed under the MIT License.
 - Wokwi Elements, Copyright (c) Uri Shaked and contributors, distributed under the MIT License.
+- Adafruit SSD1306 2.5.17 and Adafruit GFX Library 1.12.6, distributed under BSD licenses; Adafruit BusIO 1.17.4 under the MIT License. Copyright and full license notices are retained inside the bundled runtime's library directories.
 - Monaco Editor, Electron, React, Lucide, and their transitive dependencies, distributed under their respective licenses.
 
 Arduino is a trademark of Arduino SA. This independent learning tool is not affiliated with or endorsed by Arduino SA.

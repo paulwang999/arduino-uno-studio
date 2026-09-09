@@ -12,6 +12,9 @@ assert.ok(arduinoCompletionCount > 650, `Expected a comprehensive catalog, found
 assert.ok(generatedArduinoKeywords.length >= 490)
 assert.deepEqual(generatedArduinoHeaders.includes('FastLED.h'), true)
 assert.deepEqual(generatedArduinoHeaders.includes('StudioSonar.h'), true)
+assert.deepEqual(generatedArduinoHeaders.includes('Adafruit_SSD1306.h'), true)
+assert.ok(labels('Adafruit_SSD1306 screen(128, 64, &Wire, -1);', 'screen.cl').includes('clearDisplay'))
+assert.ok(labels('Adafruit_SSD1306 screen(128, 64, &Wire, -1);', 'screen.dr').includes('drawRect'))
 
 const globalLabels = labels('', 'pin')
 assert.ok(globalLabels.includes('pinMode'))

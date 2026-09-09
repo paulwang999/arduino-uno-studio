@@ -22,7 +22,7 @@ export function codeDiagnostics(source: string) {
   if (readsDigitalInput && !configuresAnyInput) {
     diagnostics.push('HARDWARE WARNING: A digital input is read without an input pinMode. The Circuit button connects to GND and requires INPUT_PULLUP.')
   } else if (readsDigitalInput && configuresPlainInput) {
-    diagnostics.push('CIRCUIT WARNING: INPUT needs an external pull-up or pull-down resistor. The Circuit button connects to GND, so use INPUT_PULLUP for matching simulation and Uno behavior.')
+    diagnostics.push('CIRCUIT NOTE: INPUT needs a driven signal (such as a powered PIR output) or an external pull-up or pull-down resistor. For a switch connected only to GND, use INPUT_PULLUP.')
   }
 
   const usesSerial = /\bSerial\s*\.\s*(?:available|flush|parseFloat|parseInt|peek|print|println|read|readBytes|readString|write)\b/.test(code)
@@ -40,7 +40,6 @@ export function codeDiagnostics(source: string) {
   }
 
   const simulationLimitations: Array<[RegExp, string]> = [
-    [/(?:#\s*include\s*[<"]Wire\.h[>"]|\bWire\s*\.)/, 'I2C/Wire devices'],
     [/(?:#\s*include\s*[<"]SPI\.h[>"]|\bSPI\s*\.)/, 'external SPI devices'],
     [/(?:#\s*include\s*[<"]SD\.h[>"]|\bSD\s*\.)/, 'SD cards and files'],
     [/(?:#\s*include\s*[<"]LiquidCrystal\.h[>"]|\bLiquidCrystal\b|\blcd\s*\.)/, 'LCD display output'],
@@ -55,11 +54,21 @@ export function codeDiagnostics(source: string) {
     }
   }
 
+  if (/\bWire\b|Adafruit_SSD1306/.test(code)) {
+    diagnostics.push('SIMULATION NOTE: Hardware I2C on A4/A5 supports the SSD1306 128x64 OLED (0x3C/0x3D). Other I2C devices, bit-banged I2C and OLED hardware scrolling are not simulated.')
+  }
   return diagnostics
 }
 
 export function circuitHardwareDiagnostics(activeComponents: CircuitComponentId[]) {
   const diagnostics: string[] = []
+  if (activeComponents.includes('oled')) diagnostics.push('CIRCUIT NOTE: OLED examples use a 5V-compatible SSD1306 I2C breakout, not a bare 3.3V panel. Check the real module voltage rating. Its framebuffer uses 1024 of the Uno\'s 2048 RAM bytes.')
+  if (activeComponents.includes('rgb-led')) {
+    diagnostics.push('CIRCUIT WARNING: Use a common-cathode RGB LED with COM to GND. Connect R, G and B through separate 220-330 ohm resistors; physical pin order varies by part.')
+  }
+  if (activeComponents.includes('pir')) {
+    diagnostics.push('SIMULATION NOTE: PIR Motion directly controls the simulated output level. Real PIR modules have startup, hold and retrigger delays that are not modeled.')
+  }
   if (activeComponents.includes('led')) {
     diagnostics.push('CIRCUIT WARNING: Add a 220-330 ohm series resistor to an external LED. The electrical solver does not add hidden protection and will flag excessive LED current.')
   }

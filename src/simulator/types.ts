@@ -8,6 +8,7 @@ export type SimulationState = {
   virtualMillis: number
   partOutputs: Record<string, ElectricalPartOutput>
   ws2812Colors: Record<string, string[]>
+  oledFrames?: Record<string, Uint8Array>
   terminalVoltages: Record<string, number>
   faults: ElectricalFault[]
   baudRate: number

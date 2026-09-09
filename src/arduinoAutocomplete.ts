@@ -219,6 +219,25 @@ const objectMembers: ArduinoCompletion[] = [
     ['rewindDirectory', 'rewindDirectory()', 'void File.rewindDirectory()'],
     ...streamMembers,
   ]),
+  ...member('Adafruit_SSD1306', [
+    ['begin', 'begin(SSD1306_SWITCHCAPVCC, ${1:0x3C})', 'bool display.begin(uint8_t supply, uint8_t address)'],
+    ['clearDisplay', 'clearDisplay()', 'void display.clearDisplay()'],
+    ['display', 'display()', 'void display.display()', 'Send the pixel buffer to the OLED.'],
+    ['setCursor', 'setCursor(${1:0}, ${2:0})', 'void display.setCursor(int16_t x, int16_t y)'],
+    ['setTextSize', 'setTextSize(${1:1})', 'void display.setTextSize(uint8_t size)'],
+    ['setTextColor', 'setTextColor(${1:SSD1306_WHITE})', 'void display.setTextColor(uint16_t color)'],
+    ['setTextWrap', 'setTextWrap(${1:true})', 'void display.setTextWrap(bool wrap)'],
+    ['print', 'print(${1:value})', 'size_t display.print(value)'],
+    ['println', 'println(${1:value})', 'size_t display.println(value)'],
+    ['drawPixel', 'drawPixel(${1:0}, ${2:0}, ${3:SSD1306_WHITE})', 'void display.drawPixel(int16_t x, int16_t y, uint16_t color)'],
+    ['drawLine', 'drawLine(${1:0}, ${2:0}, ${3:127}, ${4:63}, ${5:SSD1306_WHITE})', 'void display.drawLine(x0, y0, x1, y1, color)'],
+    ['drawRect', 'drawRect(${1:0}, ${2:0}, ${3:128}, ${4:64}, ${5:SSD1306_WHITE})', 'void display.drawRect(x, y, width, height, color)'],
+    ['fillRect', 'fillRect(${1:0}, ${2:0}, ${3:20}, ${4:20}, ${5:SSD1306_WHITE})', 'void display.fillRect(x, y, width, height, color)'],
+    ['drawCircle', 'drawCircle(${1:64}, ${2:32}, ${3:10}, ${4:SSD1306_WHITE})', 'void display.drawCircle(x, y, radius, color)'],
+    ['fillCircle', 'fillCircle(${1:64}, ${2:32}, ${3:10}, ${4:SSD1306_WHITE})', 'void display.fillCircle(x, y, radius, color)'],
+    ['invertDisplay', 'invertDisplay(${1:true})', 'void display.invertDisplay(bool invert)'],
+    ['setRotation', 'setRotation(${1:0})', 'void display.setRotation(uint8_t rotation)'],
+  ]),
   ...member('Servo', [
     ['attach', 'attach(${1:9})', 'uint8_t Servo.attach(int pin)'],
     ['detach', 'detach()', 'void Servo.detach()'],
@@ -354,7 +373,7 @@ export function extractArduinoSymbols(source: string) {
     add(name, 'variable', `${type} from this sketch`)
     if (['Servo', 'Stepper', 'LiquidCrystal', 'SoftwareSerial', 'File', 'CRGB', 'String', 'Sonar'].includes(type)) objectTypes.set(name, type)
   }
-  for (const match of clean.matchAll(/\b(Servo|Stepper|LiquidCrystal|SoftwareSerial|File|CRGB|String|Sonar)\s+([A-Za-z_]\w*)\s*(?=\(|;|=|\[)/g)) {
+  for (const match of clean.matchAll(/\b(Adafruit_SSD1306|Servo|Stepper|LiquidCrystal|SoftwareSerial|File|CRGB|String|Sonar)\s+([A-Za-z_]\w*)\s*(?=\(|;|=|\[)/g)) {
     add(match[2], 'variable', `${match[1]} from this sketch`)
     objectTypes.set(match[2], match[1])
   }

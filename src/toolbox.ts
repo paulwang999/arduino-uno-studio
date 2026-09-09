@@ -21,8 +21,8 @@ export type ToolboxCategory = {
 
 export const toolboxCategories: ToolboxCategory[] = [
   { id: 'basics', label: 'Basics', color: '#2f9fbd', snippetIds: ['setup-loop', 'pin-mode'] },
-  { id: 'input', label: 'Input', color: '#c65b91', snippetIds: ['digital-read', 'analog-read', 'ultrasonic-distance'] },
-  { id: 'output', label: 'Output', color: '#d88932', snippetIds: ['digital-write', 'analog-write'] },
+  { id: 'input', label: 'Input', color: '#c65b91', snippetIds: ['digital-read', 'analog-read', 'ultrasonic-distance', 'pir-motion', 'ntc-temperature', 'slide-switch-read', 'joystick-read'] },
+  { id: 'output', label: 'Output', color: '#d88932', snippetIds: ['digital-write', 'analog-write', 'rgb-color', 'oled-text', 'oled-graphics'] },
   { id: 'led-strip', label: 'LED Strip', color: '#b69a35', snippetIds: ['ws2812-solid', 'ws2812-rainbow'] },
   { id: 'time', label: 'Time', color: '#36977d', snippetIds: ['delay', 'millis'] },
   { id: 'logic', label: 'Logic', color: '#7c62bd', snippetIds: ['if-else'] },

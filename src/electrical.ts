@@ -29,6 +29,7 @@ export type ElectricalPartOutput = {
   on: boolean
   frequency: number
   angle: number
+  rgb?: number[]
 }
 
 export type ElectricalSolveResult = {
@@ -139,6 +140,11 @@ type Source = {
 
 type ResistorStamp = { a: string; b: string; resistance: number }
 type DiodeStamp = { part: CircuitPartInstance; anode: string; cathode: string }
+
+export function ntcResistance(celsius: number) {
+  const kelvin = Math.max(-40, Math.min(125, celsius)) + 273.15
+  return 10_000 * Math.exp(3950 * (1 / kelvin - 1 / 298.15))
+}
 
 function boardTerminalForPin(pin: number) {
   return pin <= 13 ? `uno:D${pin}` : `uno:A${pin - 14}`
@@ -251,6 +257,26 @@ export function solveElectricalCircuit(design: CircuitDesign, pins: UnoPinElectr
       addResistor(partNet('1'), partNet('2'), part.resistance)
     } else if (part.type === 'button' && part.pressed) {
       addResistor(partNet('1'), partNet('2'), 0.1)
+    } else if (part.type === 'slide-switch') {
+      addResistor(partNet('2'), partNet(part.value === 1 ? '3' : '1'), 0.1)
+    } else if (part.type === 'ntc') {
+      addResistor(partNet('VCC'), partNet('OUT'), 10_000)
+      addResistor(partNet('OUT'), partNet('GND'), ntcResistance(part.value))
+    } else if (part.type === 'pir') {
+      addResistor(partNet('VCC'), partNet('GND'), 100_000)
+    } else if (part.type === 'oled') {
+      addResistor(partNet('VCC'), partNet('GND'), 1000)
+      addResistor(partNet('VCC'), partNet('SDA'), 4700)
+      addResistor(partNet('VCC'), partNet('SCL'), 4700)
+    } else if (part.type === 'joystick') {
+      for (const [terminal, value] of [['HORZ', part.value], ['VERT', part.value2 ?? 512]] as const) {
+        const ratio = Math.max(0, Math.min(1, value / 1023))
+        addResistor(partNet('VCC'), partNet(terminal), Math.max(1, 10_000 * (1 - ratio)))
+        addResistor(partNet(terminal), partNet('GND'), Math.max(1, 10_000 * ratio))
+      }
+      if (part.pressed) addResistor(partNet('SEL'), partNet('GND'), 0.1)
+    } else if (part.type === 'rgb-led') {
+      for (const channel of ['R', 'G', 'B']) diodes.push({ part, anode: partNet(channel), cathode: partNet('COM') })
     } else if (part.type === 'potentiometer' || part.type === 'photoresistor') {
       const ratio = Math.max(0, Math.min(1, part.value / 1023))
       const total = Math.max(100, part.resistance)
@@ -262,6 +288,15 @@ export function solveElectricalCircuit(design: CircuitDesign, pins: UnoPinElectr
   }
 
   let solution = solveLinear(baseMatrix, baseVector)
+  // Powered sensor outputs are driven only after resolving their actual supply wiring.
+  for (const part of design.parts.filter((candidate) => candidate.type === 'pir')) {
+    const v = (name: string) => solution[netIndex.get(net(terminalId(part.instanceId, name))) ?? -1] || 0
+    const supply = v('VCC') - v('GND')
+    if (supply >= 4.5 && supply <= 5.5 && Math.abs(v('GND')) < 0.5) {
+      addSource({ id: `${part.instanceId}-output`, positiveNet: net(terminalId(part.instanceId, 'OUT')), negativeNet: net(terminalId(part.instanceId, 'GND')), voltage: part.pressed ? 3.3 : 0, resistance: 100, currentLimit: 0.01, label: 'PIR output' })
+    }
+  }
+  solution = solveLinear(baseMatrix, baseVector)
   for (let iteration = 0; iteration < 30; iteration += 1) {
     const matrix = baseMatrix.map((row) => [...row])
     const vector = [...baseVector]
@@ -321,6 +356,7 @@ export function solveElectricalCircuit(design: CircuitDesign, pins: UnoPinElectr
     if (partOutputs[part.instanceId]) continue
     let voltage = 0
     let current = 0
+    let rgb: number[] | undefined
     if (part.type === 'led') {
       voltage = voltageAt(part, 'A') - voltageAt(part, 'K')
       current = 2e-11 * (Math.exp(Math.min(30, Math.max(-5, voltage) / 0.1)) - 1)
@@ -333,6 +369,18 @@ export function solveElectricalCircuit(design: CircuitDesign, pins: UnoPinElectr
           wireIds: wiresForNets(net(terminalId(part.instanceId, 'A')), net(terminalId(part.instanceId, 'K'))),
         })
       }
+    } else if (part.type === 'rgb-led') {
+      const currents = ['R', 'G', 'B'].map((channel) => {
+        const delta = voltageAt(part, channel) - voltageAt(part, 'COM')
+        return Math.max(0, 2e-11 * (Math.exp(Math.min(30, Math.max(-5, delta) / 0.1)) - 1))
+      })
+      current = currents.reduce((sum, value) => sum + value, 0)
+      rgb = currents.map((value) => Math.min(1, value / 0.014))
+      if (currents.some((value) => value > 0.02)) addFault({
+        id: `rgb-overcurrent-${part.instanceId}`, severity: 'error',
+        message: 'RGB LED needs a separate series resistor on each R, G and B pin (for example 220 ohms).',
+        partIds: [part.instanceId], wireIds: wiresForNets(...['R', 'G', 'B'].map((name) => net(terminalId(part.instanceId, name)))),
+      })
     } else if (part.type === 'resistor') {
       voltage = voltageAt(part, '1') - voltageAt(part, '2')
       current = voltage / Math.max(0.01, part.resistance)
@@ -346,6 +394,24 @@ export function solveElectricalCircuit(design: CircuitDesign, pins: UnoPinElectr
           wireIds: wiresForNets(net(terminalId(part.instanceId, '1')), net(terminalId(part.instanceId, '2'))),
         })
       }
+    } else if (part.type === 'slide-switch') {
+      voltage = voltageAt(part, '2')
+    } else if (part.type === 'oled') {
+      voltage = voltageAt(part, 'VCC') - voltageAt(part, 'GND')
+      current = voltage / 1000
+      if (voltage < -0.2 || voltage > 5.5) addFault({
+        id: `oled-supply-${part.instanceId}`, severity: 'error',
+        message: `${circuitLabel(part)} has an unsafe supply (${voltage.toFixed(1)}V). Check polarity and module voltage rating.`,
+        partIds: [part.instanceId], wireIds: wiresForNets(net(terminalId(part.instanceId, 'VCC')), net(terminalId(part.instanceId, 'GND'))),
+      })
+    } else if (part.type === 'pir' || part.type === 'ntc' || part.type === 'joystick') {
+      voltage = voltageAt(part, part.type === 'joystick' ? 'HORZ' : 'OUT') - voltageAt(part, 'GND')
+      const supply = voltageAt(part, 'VCC') - voltageAt(part, 'GND')
+      if (Math.abs(supply) > 0.2 && (supply < 4.5 || supply > 5.5)) addFault({
+        id: `sensor-supply-${part.instanceId}`, severity: supply < 0 || supply > 5.5 ? 'error' : 'warning',
+        message: `${part.instanceId} supply is ${supply.toFixed(1)}V; these examples use a 5V supply and shared ground.`,
+        partIds: [part.instanceId], wireIds: wiresForNets(net(terminalId(part.instanceId, 'VCC')), net(terminalId(part.instanceId, 'GND'))),
+      })
     } else if (part.type === 'button') {
       voltage = voltageAt(part, '1') - voltageAt(part, '2')
     } else if (part.type === 'potentiometer' || part.type === 'photoresistor') {
@@ -399,7 +465,7 @@ export function solveElectricalCircuit(design: CircuitDesign, pins: UnoPinElectr
         })
       }
     }
-    partOutputs[part.instanceId] = { voltage, current, on: part.type === 'led' ? current > 0.0005 : Math.abs(voltage) > 2.5, frequency: 0, angle: 90 }
+    partOutputs[part.instanceId] = { voltage, current, on: part.type === 'led' || part.type === 'rgb-led' ? current > 0.0005 : Math.abs(voltage) > 2.5, frequency: 0, angle: 90, ...(rgb ? { rgb } : {}) }
   }
 
   const digitalInputs: Record<number, boolean> = {}

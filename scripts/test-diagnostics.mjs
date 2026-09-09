@@ -18,7 +18,7 @@ assert.match(codeDiagnostics('void setup() {} void loop() { Serial.println("hell
 assert.match(codeDiagnostics('void setup() {} void loop() { digitalRead(2); }').join('\n'), /INPUT_PULLUP/)
 assert.match(codeDiagnostics('void setup() { pinMode(2, INPUT); } void loop() { digitalRead(2); }').join('\n'), /external pull-up or pull-down/)
 assert.match(codeDiagnostics('void setup() {} void loop() { analogWrite(4, 128); }').join('\n'), /D4 is not a PWM pin/)
-assert.match(codeDiagnostics('#include <Wire.h>\nvoid setup() { Wire.begin(); } void loop() {}').join('\n'), /SIMULATION LIMITATION: I2C\/Wire/)
+assert.match(codeDiagnostics('#include <Wire.h>\nvoid setup() { Wire.begin(); } void loop() {}').join('\n'), /Hardware I2C.*SSD1306/)
 assert.match(codeDiagnostics('#include <SD.h>\nvoid setup() { SD.begin(10); } void loop() {}').join('\n'), /SIMULATION LIMITATION: SD cards/)
 assert.match(circuitHardwareDiagnostics(['led', 'servo']).join('\n'), /220-330 ohm series resistor/)
 assert.match(circuitHardwareDiagnostics(['led', 'servo']).join('\n'), /external 5V supply/)

@@ -7,6 +7,8 @@ import {
   AVRIOPort,
   AVRTimer,
   AVRUSART,
+  AVRTWI,
+  twiConfig,
   CPU,
   PinState,
   portBConfig,
@@ -23,6 +25,7 @@ import { loadIntelHex } from './intelHex'
 import type { SimulationState, WorkerCommand, WorkerEvent } from './types'
 import { UltrasonicPulseScheduler, type UltrasonicConnection } from './ultrasonic'
 import { Ws2812Decoder } from './ws2812'
+import { OledBus } from './oledBus'
 
 const SPEED_HZ = 16_000_000
 const BATCH_CYCLES = 120_000
@@ -45,6 +48,7 @@ class UnoSimulation {
   readonly portD: AVRIOPort
   readonly adc: AVRADC
   readonly usart: AVRUSART
+  private oledBus: OledBus
   private digitalPins = Array.from({ length: 20 }, () => false)
   private analogValues = Array.from({ length: 6 }, () => 0)
   private design: CircuitDesign
@@ -61,6 +65,9 @@ class UnoSimulation {
   private ws2812PinByPart = new Map<string, number>()
   private ws2812DataPins = new Set<number>()
   private ws2812Decoders = new Map<string, Ws2812Decoder>()
+  private rgbEnergy = new Map<string, number[]>()
+  private rgbSampleCycle = 0
+  private rgbWindowStart = 0
 
   constructor(hex: string, design: CircuitDesign) {
     loadIntelHex(hex, new Uint8Array(this.program.buffer))
@@ -74,6 +81,8 @@ class UnoSimulation {
     this.adc = new AVRADC(this.cpu, adcConfig)
     this.usart = new AVRUSART(this.cpu, usart0Config, SPEED_HZ)
     this.design = design
+    this.oledBus = new OledBus(new AVRTWI(this.cpu, twiConfig, SPEED_HZ), () => this.electricalResult, (callback, cycles) => this.cpu.addClockEvent(callback, cycles))
+    this.oledBus.configure(design)
 
     this.refreshWs2812Connections()
     this.refreshUltrasonicConnections()
@@ -260,6 +269,13 @@ class UnoSimulation {
     this.syncingCircuit = true
     try {
       const pinStates = this.pinElectricalStates()
+      const elapsed = this.cpu.cycles - this.rgbSampleCycle
+      for (const [id, output] of Object.entries(this.electricalResult.partOutputs)) {
+        if (!output.rgb) continue
+        const sum = this.rgbEnergy.get(id) || [0, 0, 0]
+        this.rgbEnergy.set(id, sum.map((value, channel) => value + output.rgb![channel] * elapsed))
+      }
+      this.rgbSampleCycle = this.cpu.cycles
       this.electricalResult = solveElectricalCircuit(this.design, pinStates)
       for (const pin of pinStates) {
         if (!pin.output) {
@@ -281,9 +297,14 @@ class UnoSimulation {
 
   setDesign(design: CircuitDesign) {
     this.design = design
+    this.oledBus.configure(design)
+    this.rgbEnergy.clear()
+    this.rgbWindowStart = this.cpu.cycles
+    this.rgbSampleCycle = this.cpu.cycles
     this.refreshWs2812Connections()
     this.refreshUltrasonicConnections()
     this.syncCircuit()
+    this.oledBus.state()
   }
 
   writeSerial(text: string) {
@@ -308,6 +329,7 @@ class UnoSimulation {
 
   state(): SimulationState {
     this.syncCircuit()
+    const oled = this.oledBus.state()
     const ws2812Colors: Record<string, string[]> = {}
     for (const part of this.design.parts.filter((candidate) => candidate.type === 'ws2812b')) {
       const decoder = this.ws2812Decoders.get(part.instanceId)
@@ -318,12 +340,16 @@ class UnoSimulation {
     const partOutputs = Object.fromEntries(Object.entries(this.electricalResult.partOutputs).map(([id, output]) => {
       const lastRise = this.buzzerRisingCycle.get(id) || 0
       if (lastRise && this.cpu.cycles - lastRise > SPEED_HZ / 10) this.buzzerFrequency.set(id, 0)
+      const rgb = output.rgb ? (this.rgbEnergy.get(id) || [0, 0, 0]).map((value, channel) => this.cpu.cycles > this.rgbWindowStart ? value / (this.cpu.cycles - this.rgbWindowStart) : output.rgb![channel]) : undefined
       return [id, {
         ...output,
+        ...(rgb ? { rgb, on: rgb.some((value) => value > 0.035), current: rgb.reduce((sum, value) => sum + value, 0) * 0.014 } : {}),
         frequency: this.buzzerFrequency.get(id) || 0,
         angle: this.servoAngle.get(id) ?? 90,
       }]
     }))
+    this.rgbEnergy.clear()
+    this.rgbWindowStart = this.cpu.cycles
     return {
       digitalPins: [...this.digitalPins],
       analogValues: [...this.analogValues],
@@ -331,8 +357,9 @@ class UnoSimulation {
       virtualMillis: Math.round((this.cpu.cycles / SPEED_HZ) * 1000),
       partOutputs,
       ws2812Colors,
+      oledFrames: oled.frames,
       terminalVoltages: { ...this.electricalResult.terminalVoltages },
-      faults: [...this.electricalResult.faults],
+      faults: [...this.electricalResult.faults, ...oled.faults],
       baudRate: Math.round(this.usart.baudRate || 0),
     }
   }

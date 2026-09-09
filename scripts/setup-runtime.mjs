@@ -72,7 +72,7 @@ await run(['version'])
 await run(['core', 'update-index'])
 await run(['core', 'install', 'arduino:avr'])
 
-for (const library of ['Servo', 'LiquidCrystal', 'Stepper', 'SD', 'CapacitiveSensor@0.5.1', 'FastLED@3.10.5']) {
+for (const library of ['Servo', 'LiquidCrystal', 'Stepper', 'SD', 'CapacitiveSensor@0.5.1', 'FastLED@3.10.5', 'Adafruit BusIO@1.17.4', 'Adafruit GFX Library@1.12.6', 'Adafruit SSD1306@2.5.17']) {
   await run(['lib', 'install', library])
 }
 await pruneFastLedRuntime()

@@ -10,6 +10,12 @@ export type CircuitPartType =
   | 'resistor'
   | 'battery'
   | 'breadboard'
+  | 'pir'
+  | 'ntc'
+  | 'slide-switch'
+  | 'joystick'
+  | 'rgb-led'
+  | 'oled'
 
 export type CircuitComponentType = CircuitPartType
 export type CircuitComponentId = CircuitPartType
@@ -21,6 +27,7 @@ export type CircuitPartInstance = {
   type: CircuitPartType
   position: Point
   value: number
+  value2?: number
   pressed: boolean
   resistance: number
   voltage: number
@@ -56,6 +63,12 @@ export const circuitComponentNames: Record<CircuitPartType, string> = {
   resistor: 'Resistor',
   battery: 'Battery',
   breadboard: 'Breadboard',
+  pir: 'PIR Motion Sensor',
+  ntc: 'NTC Temperature Sensor',
+  'slide-switch': 'Slide Switch',
+  joystick: 'Analog Joystick',
+  'rgb-led': 'RGB LED',
+  oled: 'SSD1306 OLED',
 }
 
 export type CircuitComponentDefinition = {
@@ -77,6 +90,12 @@ export const circuitComponentCatalog: CircuitComponentDefinition[] = [
   { id: 'ws2812b', name: 'WS2812B LED strip', category: 'Outputs', description: 'Individually addressable full-color LEDs' },
   { id: 'breadboard', name: 'Full breadboard', category: 'Prototyping', description: 'Connected terminal strips and split power rails' },
   { id: 'battery', name: 'Battery', category: 'Power', description: 'Adjustable DC source with polarity and internal resistance' },
+  { id: 'slide-switch', name: 'Slide switch (SPDT)', category: 'Basic', description: 'Connect common terminal 2 to terminal 1 or 3' },
+  { id: 'pir', name: 'PIR motion sensor', category: 'Sensors', description: '5V motion input with a 3.3V digital output' },
+  { id: 'ntc', name: 'NTC temperature sensor', category: 'Sensors', description: '10K thermistor module, beta 3950, analog temperature input' },
+  { id: 'joystick', name: 'Analog joystick', category: 'Sensors', description: 'Two analog axes and a normally-open select button' },
+  { id: 'rgb-led', name: 'RGB LED (common cathode)', category: 'Outputs', description: 'Red, green and blue channels; add a series resistor on each channel' },
+  { id: 'oled', name: 'OLED SSD1306 (128x64 I2C)', category: 'Outputs', description: 'Monochrome text and graphics; SDA A4, SCL A5; address 0x3C or 0x3D' },
 ]
 
 export const circuitPartSizes: Record<CircuitPartType, { width: number; height: number }> = {
@@ -91,9 +110,19 @@ export const circuitPartSizes: Record<CircuitPartType, { width: number; height: 
   resistor: { width: 138, height: 108 },
   battery: { width: 138, height: 108 },
   breadboard: { width: 390, height: 232 },
+  pir: { width: 170, height: 150 },
+  ntc: { width: 170, height: 160 },
+  'slide-switch': { width: 170, height: 130 },
+  joystick: { width: 210, height: 230 },
+  'rgb-led': { width: 170, height: 150 },
+  oled: { width: 240, height: 212 },
 }
 
 const preferredPins: Partial<Record<CircuitPartType, string[]>> = {
+  pir: ['uno:D4', 'uno:D5', 'uno:D2', 'uno:D3'],
+  ntc: ['uno:A0', 'uno:A1', 'uno:A2', 'uno:A3', 'uno:A4', 'uno:A5'],
+  'slide-switch': ['uno:D2', 'uno:D3', 'uno:D4', 'uno:D5'],
+  joystick: ['uno:A0', 'uno:A1', 'uno:A2', 'uno:A3', 'uno:A4', 'uno:A5'],
   led: ['uno:D13', 'uno:D12', 'uno:D11', 'uno:D10', 'uno:D9', 'uno:D8', 'uno:D7', 'uno:D6', 'uno:D5', 'uno:D4', 'uno:D3', 'uno:D2'],
   button: ['uno:D2', 'uno:D3', 'uno:D4', 'uno:D5', 'uno:D6', 'uno:D7', 'uno:D8', 'uno:D9', 'uno:D10', 'uno:D11', 'uno:D12', 'uno:D13'],
   potentiometer: ['uno:A0', 'uno:A1', 'uno:A2', 'uno:A3', 'uno:A4', 'uno:A5'],
@@ -105,6 +134,12 @@ const preferredPins: Partial<Record<CircuitPartType, string[]>> = {
 }
 
 const defaultWireColors: Record<CircuitPartType, string> = {
+  pir: '#36c879',
+  ntc: '#ee9b38',
+  'slide-switch': '#54b8df',
+  joystick: '#ef78c7',
+  'rgb-led': '#ffffff',
+  oled: '#54b8df',
   led: '#ef615e',
   button: '#36c879',
   potentiometer: '#ee9b38',
@@ -133,6 +168,11 @@ export function terminalId(partId: string, terminal: string) {
 }
 
 export function partTerminalNames(type: CircuitPartType): string[] {
+  if (type === 'oled') return ['GND', 'VCC', 'SCL', 'SDA']
+  if (type === 'pir' || type === 'ntc') return ['VCC', 'OUT', 'GND']
+  if (type === 'slide-switch') return ['1', '2', '3']
+  if (type === 'joystick') return ['VCC', 'HORZ', 'VERT', 'SEL', 'GND']
+  if (type === 'rgb-led') return ['R', 'G', 'B', 'COM']
   if (type === 'led') return ['A', 'K']
   if (type === 'button') return ['1', '2']
   if (type === 'potentiometer' || type === 'photoresistor') return ['SIG', 'VCC', 'GND']
@@ -215,7 +255,7 @@ export function createCircuitWire(wires: CircuitWire[], from: string, to: string
 function nextDefaultBoardPin(type: CircuitPartType, design: CircuitDesign) {
   const candidates = preferredPins[type] || []
   const used = new Set(design.wires.flatMap((wire) => [wire.from, wire.to]).filter((endpoint) => endpoint.startsWith('uno:D') || endpoint.startsWith('uno:A')))
-  return candidates.find((candidate) => !used.has(candidate)) || candidates[0]
+  return candidates.find((candidate) => !used.has(candidate))
 }
 
 export function createCircuitPart(type: CircuitPartType, design: CircuitDesign): CircuitPartInstance {
@@ -223,7 +263,8 @@ export function createCircuitPart(type: CircuitPartType, design: CircuitDesign):
     instanceId: `${type}-${nextInstanceNumber(type, design.parts)}`,
     type,
     position: nextPosition(type, design.parts),
-    value: type === 'potentiometer' ? 512 : type === 'photoresistor' ? 700 : type === 'ultrasonic' ? 100 : type === 'ws2812b' ? 8 : 0,
+    value: type === 'oled' ? (design.parts.some((part) => part.type === 'oled' && part.value === 60) ? 61 : 60) : type === 'ntc' ? 25 : type === 'joystick' || type === 'potentiometer' ? 512 : type === 'photoresistor' ? 700 : type === 'ultrasonic' ? 100 : type === 'ws2812b' ? 8 : 0,
+    ...(type === 'joystick' ? { value2: 512 } : {}),
     pressed: false,
     resistance: type === 'resistor' ? 220 : 10_000,
     voltage: type === 'battery' ? 9 : 0,
@@ -238,7 +279,30 @@ function defaultPartWires(part: CircuitPartInstance, design: CircuitDesign) {
     wires.push(wire)
   }
   const signalPin = nextDefaultBoardPin(part.type, design)
-  if (part.type === 'led' && signalPin) {
+  if (part.type === 'oled') {
+    add('GND', 'uno:GND.2', '#30383d')
+    add('VCC', 'uno:5V', '#e54848')
+    add('SDA', 'uno:A4', '#54b8df')
+    add('SCL', 'uno:A5', '#f2d54a')
+  } else if ((part.type === 'pir' || part.type === 'ntc') && signalPin) {
+    add('OUT', signalPin, defaultWireColors[part.type])
+    add('VCC', 'uno:5V', '#e54848')
+    add('GND', 'uno:GND.2', '#30383d')
+  } else if (part.type === 'slide-switch' && signalPin) {
+    add('2', signalPin, defaultWireColors[part.type])
+    add('1', 'uno:GND.2', '#30383d')
+    add('3', 'uno:5V', '#e54848')
+  } else if (part.type === 'joystick' && signalPin) {
+    add('HORZ', signalPin, '#ee9b38')
+    const verticalPin = nextDefaultBoardPin(part.type, { ...design, wires: [...design.wires, ...wires] })
+    if (verticalPin) add('VERT', verticalPin, '#54b8df')
+    const selectPin = nextDefaultBoardPin('button', design)
+    if (selectPin) add('SEL', selectPin, '#36c879')
+    add('VCC', 'uno:5V', '#e54848')
+    add('GND', 'uno:GND.2', '#30383d')
+  } else if (part.type === 'rgb-led') {
+    add('COM', 'uno:GND.2', '#30383d')
+  } else if (part.type === 'led' && signalPin) {
     add('A', signalPin, defaultWireColors.led)
     add('K', 'uno:GND.2', '#30383d')
   } else if (part.type === 'button' && signalPin) {
@@ -293,6 +357,7 @@ export function resetCircuitDesign(design: CircuitDesign) {
       ...fresh,
       instanceId: original.instanceId,
       value: original.value,
+      value2: original.value2,
       resistance: original.resistance,
       voltage: original.voltage,
       internalResistance: original.internalResistance,

@@ -1,3 +1,6 @@
+import { componentSnippets } from './componentSnippets.ts'
+import { oledSnippets } from './oledSnippets.ts'
+
 export type SnippetSection = 'Functions' | 'Variables' | 'Structure' | 'Libraries'
 export type SnippetLevel = 'Starter' | 'Builder' | 'Challenge'
 
@@ -205,6 +208,8 @@ export const snippets: Snippet[] = [
     referenceUrl: 'https://docs.arduino.cc/libraries/sd/',
     scaffold: { include: '#include <SD.h>', globals: 'const int chipSelectPin = 10;', setup: ['SD.begin(chipSelectPin);'] },
   },
+  ...componentSnippets,
+  ...oledSnippets,
 ]
 
 export function prepareSnippet(source: string, snippet: Snippet, insertionOffset: number) {

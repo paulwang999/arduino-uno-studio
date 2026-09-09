@@ -1,5 +1,6 @@
 import { Plus, Search, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { OledDisplay } from './OledDisplay'
 import {
   circuitComponentCatalog,
   type CircuitComponentCategory,
@@ -80,6 +81,12 @@ function ComponentPreview({ id }: { id: CircuitComponentType }) {
   return (
     <span className={`component-preview ${id}`} aria-hidden="true">
       {id === 'led' && <wokwi-led value color="red" />}
+      {id === 'pir' && <wokwi-pir-motion-sensor />}
+      {id === 'ntc' && <wokwi-ntc-temperature-sensor />}
+      {id === 'slide-switch' && <wokwi-slide-switch value={0} />}
+      {id === 'joystick' && <wokwi-analog-joystick />}
+      {id === 'rgb-led' && <wokwi-rgb-led ledRed={1} ledGreen={0.3} ledBlue={0.1} />}
+      {id === 'oled' && <OledDisplay preview />}
       {id === 'button' && <wokwi-pushbutton color="green" />}
       {id === 'potentiometer' && <wokwi-potentiometer min={0} max={1023} value={512} />}
       {id === 'photoresistor' && <wokwi-photoresistor-sensor ledPower />}
